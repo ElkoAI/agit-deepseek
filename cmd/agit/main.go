@@ -1,18 +1,19 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+    "context"
+    "encoding/json"
+    "flag"
+    "fmt"
+    "log"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
 
-	"agit/internal/db"
-	"agit/internal/git"
+    "agit/internal/db"
+    "agit/internal/exec"
+    "agit/internal/git"
 )
 
 func main() {
@@ -410,16 +411,24 @@ func cmdTaskDone() {
 
 	// Run test if specified and not skipped
 	if task.TestCommand.Valid && !*skipTest {
-		// TODO: Implement actual test execution
-		testResult := db.TestResult{
-			ExitCode:   0,
-			Output:     "Test execution not yet implemented in CLI",
-			DurationMS: 0,
-			Passed:     true,
-			Timestamp:  time.Now(),
+		// Execute the test command
+		ctxExec := context.Background()
+		timeout := 5 * time.Minute // Default timeout of 5 minutes
+		testResult, err := exec.RunTest(ctxExec, task.TestCommand.String, ".", timeout)
+		if err != nil {
+			log.Fatalf("Failed to execute test command: %v", err)
 		}
 
-		resultJSON, err := json.Marshal(testResult)
+		// Convert to database format
+		dbTestResult := db.TestResult{
+			ExitCode:   testResult.ExitCode,
+			Output:     exec.TruncateOutput(testResult.Output, 1000),
+			DurationMS: testResult.Duration.Milliseconds(),
+			Passed:     testResult.Passed,
+			Timestamp:  testResult.RunAt,
+		}
+
+		resultJSON, err := json.Marshal(dbTestResult)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -429,13 +438,23 @@ func cmdTaskDone() {
 		}
 
 		// Record trace
+		outputTruncated := exec.TruncateOutput(testResult.Output, 1000)
+		durationMS := testResult.Duration.Milliseconds()
 		_, err = database.CreateTrace(ctx, taskID, task.TestCommand.String, &testResult.ExitCode,
-			&testResult.Output, nil, &testResult.DurationMS)
+			&outputTruncated, nil, &durationMS)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("Ran test for task #%d: %s\n", taskID, testResult.Output)
+		status := "passed"
+		if !testResult.Passed {
+			status = "failed"
+		}
+		if testResult.TimedOut {
+			status = "timed out"
+		}
+		fmt.Printf("Test for task #%d %s (exit code: %d, duration: %v)\n",
+			taskID, status, testResult.ExitCode, testResult.Duration)
 	}
 
 	// Mark task as done

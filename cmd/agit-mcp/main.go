@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"agit/internal/db"
+	"agit/internal/exec"
 	"agit/internal/git"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -385,12 +386,20 @@ func handleTaskDone(ctx context.Context, database *db.DB, arguments map[string]i
 
 	var testResult *db.TestResult
 	if task.TestCommand.Valid && !skipTest {
+		// Execute the test command
+		timeout := 5 * time.Minute // Default timeout of 5 minutes
+		execResult, err := exec.RunTest(ctx, task.TestCommand.String, ".", timeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute test command: %w", err)
+		}
+
+		// Convert to database format
 		testResult = &db.TestResult{
-			ExitCode:   0,
-			Output:     "Test execution not yet implemented",
-			DurationMS: 0,
-			Passed:     true,
-			Timestamp:  time.Now(),
+			ExitCode:   execResult.ExitCode,
+			Output:     exec.TruncateOutput(execResult.Output, 1000),
+			DurationMS: execResult.Duration.Milliseconds(),
+			Passed:     execResult.Passed,
+			Timestamp:  execResult.RunAt,
 		}
 
 		resultJSON, err := json.Marshal(testResult)
@@ -402,8 +411,11 @@ func handleTaskDone(ctx context.Context, database *db.DB, arguments map[string]i
 			return nil, fmt.Errorf("failed to update test result: %w", err)
 		}
 
-		_, err = database.CreateTrace(ctx, int64(taskID), task.TestCommand.String, &testResult.ExitCode,
-			&testResult.Output, nil, &testResult.DurationMS)
+		// Record trace
+		outputTruncated := exec.TruncateOutput(execResult.Output, 1000)
+		durationMS := execResult.Duration.Milliseconds()
+		_, err = database.CreateTrace(ctx, int64(taskID), task.TestCommand.String, &execResult.ExitCode,
+			&outputTruncated, nil, &durationMS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to record trace: %w", err)
 		}
@@ -425,7 +437,12 @@ func handleTaskDone(ctx context.Context, database *db.DB, arguments map[string]i
 		if !testResult.Passed {
 			status = "failed"
 		}
-		msg += fmt.Sprintf("\nTest %s (exit code: %d)", status, testResult.ExitCode)
+		// Check for timeout (exit code -1)
+		if testResult.ExitCode == -1 {
+			status = "timed out"
+		}
+		duration := time.Duration(testResult.DurationMS) * time.Millisecond
+		msg += fmt.Sprintf("\nTest %s (exit code: %d, duration: %v)", status, testResult.ExitCode, duration)
 	} else if skipTest && task.TestCommand.Valid {
 		msg += "\nTest skipped (skip_test=true)"
 	}

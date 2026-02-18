@@ -42,18 +42,19 @@ AGIT (Agent Git) is a Go-based MCP server for Git-native state persistence for A
 
 ## Known Issues and Compilation Errors
 
-### ❌ MCP Server Compilation Issues
-1. **mcp-go API mismatch**: Using incorrect field names (`Required` not in `ToolInputSchema`)
-2. **Missing `NewTextContent` function**: Need to construct `TextContent` struct directly
-3. **Unused context variable**: In main function
-4. **TaskStatus references**: Need to use `db.TaskStatus` constants correctly
+### ✅ MCP Server Compilation Issues FIXED
+1. **mcp-go API mismatch**: Fixed - removed `Required` fields from `ToolInputSchema`
+2. **Missing `NewTextContent` function**: Fixed - using `TextContent` struct directly
+3. **Unused context variable**: Fixed - renamed to underscore
+4. **TaskStatus references**: Fixed - using `db.TaskStatus` type correctly
 
-### ❌ Missing Features
-1. **Test Execution**: Currently stubbed in `task_done` handlers
+### ⚠️ Remaining Missing Features
+1. **Test Execution**: ✅ **COMPLETED** - Real test execution implemented with timeout handling and output capture
 2. **Multi-worktree Support**: Schema designed for it but not fully implemented
 3. **Agent State Validation**: JSON schema defined but no validation
 4. **Concurrency Handling**: No locking mechanisms for multi-agent scenarios
 5. **Workspace Listing**: CLI shows only current workspace
+6. **Git Hook Implementation**: Hook commands exist but hooks not fully functional
 
 ## Critical Design Decisions Addressed
 
@@ -77,27 +78,43 @@ AGIT (Agent Git) is a Go-based MCP server for Git-native state persistence for A
 - **Solution**: Optional test commands with `--skip-test` flag
 - **Benefits**: Supports design, documentation, and research tasks
 
-## Immediate Fixes Required (Blocking MVP)
+## Completed Fixes (MVP Ready)
 
-### 1. Fix MCP Server Compilation
-```go
-// Incorrect:
-InputSchema: mcp.ToolInputSchema{
-    Type: "object",
-    Properties: map[string]interface{}{...},
-    Required: []string{"description"},  // This field doesn't exist
-}
+### ✅ 1. MCP Server Compilation FIXED
+- Removed all `Required` fields from `ToolInputSchema` definitions
+- Replaced `mcp.NewTextContent()` with `mcp.TextContent{Type: "text", Text: ...}`
+- Fixed `db.TaskStatus` type references throughout codebase
+- Renamed unused `ctx` variable to underscore
 
-// Correct approach - need to check actual mcp-go API
-```
+### ✅ 2. Database Schema Issues FIXED
+- Fixed `TodoList` field from `string` to `sql.NullString` in Workspace struct
+- Fixed workspace query parameter handling for NULL worktree paths
+- Fixed database migration transaction commit bug
 
-### 2. Implement Missing Functions
-- `mcp.NewTextContent` doesn't exist - need to create `TextContent` struct directly
-- Fix `db.TaskStatus` references (it's a type, not a method)
+### ✅ 3. Unit Tests Added
+- Comprehensive database unit tests covering all operations
+- Proper test setup with real git repository initialization
+- All tests pass successfully
 
-### 3. Complete Test Execution Stubs
-- Real test command execution in `task_done`
-- Proper output capture and parsing
+### ✅ 4. Test Execution Implementation
+- Created `exec.RunTest()` function with timeout handling (5 minutes default)
+- Implemented exit code capture and special codes for timeout (-1) and errors (-2)
+- Added output truncation to 1000 characters for database storage
+- Integrated into both CLI (`agit task done`) and MCP server (`task_done` tool)
+- Records test traces with duration, exit code, and truncated output
+
+### ✅ 5. MCP Documentation
+- Created comprehensive [docs/mcp.md](docs/mcp.md) with detailed tool reference
+- Includes all 8 MCP tools with parameters, examples, and error handling
+- Documents safety features, best practices, and architecture notes
+- Linked from main README.md for easy access
+
+### ⚠️ Remaining Work for Full MVP
+1. **Real Test Execution**: ✅ **COMPLETED** - Implemented `exec.RunTest()` with timeout, exit code handling, and output truncation
+2. **Git Hook Implementation**: Make hooks fully functional
+3. **Workspace Management**: Complete workspace listing and switching
+4. **MCP Server Testing**: Test MCP server with actual clients
+5. **MCP Documentation**: ✅ **COMPLETED** - Created comprehensive [docs/mcp.md](docs/mcp.md) with detailed tool reference
 
 ## Next Phase Features (Post-MVP)
 
@@ -121,16 +138,18 @@ InputSchema: mcp.ToolInputSchema{
 
 ## Testing Strategy
 
-### Unit Tests Needed
-- Database operations (workspace, task, checkpoint, trace)
-- Git operations (mock git commands)
-- MCP tool handlers
-- CLI command parsing and execution
+### ✅ Unit Tests Implemented
+- Database operations (workspace, task, checkpoint, trace) - **COMPLETE**
+- Git operations (mock git commands) - **PARTIAL (integration tests needed)**
+- MCP tool handlers - **PARTIAL (implemented, needs integration testing)**
+- CLI command parsing and execution - **PARTIAL**
 
 ### Integration Tests
-- Full workflow: init → task → checkpoint → restore
-- Git hook installation and execution
-- MCP server communication
+- Full workflow: init → task → checkpoint → restore - **PENDING**
+- Git hook installation and execution - **PENDING**
+- MCP server communication - **PENDING**
+
+
 
 ### Manual Testing Checklist
 - [ ] Fresh repository initialization

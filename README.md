@@ -123,7 +123,7 @@ AGIT creates workspaces based on Git branches and worktrees:
 
 ## MCP Tools for AI Agents
 
-AGIT exposes the following tools via MCP:
+AGIT exposes the following tools via MCP. For detailed documentation including parameters, examples, and error handling, see [docs/mcp.md](docs/mcp.md).
 
 ### `workspace_status`
 Get current workspace state including active task, task counts, and last checkpoint.
