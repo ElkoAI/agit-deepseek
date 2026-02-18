@@ -60,7 +60,7 @@ func main() {
 						"description": "Optional test command to run when task is done",
 					},
 				},
-				Required: []string{"description"},
+
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func main() {
 						"description": "ID of the task to start",
 					},
 				},
-				Required: []string{"task_id"},
+
 			},
 		},
 		{
@@ -112,7 +112,7 @@ func main() {
 						"description": "Skip running tests even if test command is defined",
 					},
 				},
-				Required: []string{"task_id"},
+
 			},
 		},
 		{
@@ -130,7 +130,7 @@ func main() {
 						"description": "Allow checkpoint even with uncommitted changes",
 					},
 				},
-				Required: []string{"message"},
+
 			},
 		},
 		{
@@ -165,7 +165,7 @@ func main() {
 						"description": "Maximum number of traces to return",
 					},
 				},
-				Required: []string{"task_id"},
+
 			},
 		},
 	}
@@ -202,7 +202,7 @@ func main() {
 	})
 
 	// Handle graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
@@ -219,13 +219,13 @@ func main() {
 	}
 }
 
-func handleWorkspaceStatus(ctx context.Context, db *db.DB) (*mcp.CallToolResult, error) {
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+func handleWorkspaceStatus(ctx context.Context, database *db.DB) (*mcp.CallToolResult, error) {
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	status, err := db.GetWorkspaceStatus(ctx, ws.WorkspaceID)
+	status, err := database.GetWorkspaceStatus(ctx, ws.WorkspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace status: %w", err)
 	}
@@ -237,13 +237,13 @@ func handleWorkspaceStatus(ctx context.Context, db *db.DB) (*mcp.CallToolResult,
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(string(content)),
+			mcp.TextContent{Type: "text", Text: string(content)},
 		},
 	}, nil
 }
 
-func handleTaskNew(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+func handleTaskNew(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
@@ -258,7 +258,7 @@ func handleTaskNew(ctx context.Context, db *db.DB, arguments map[string]interfac
 		testCommand = &tc
 	}
 
-	task, err := db.CreateTask(ctx, ws.WorkspaceID, description, testCommand, nil)
+	task, err := database.CreateTask(ctx, ws.WorkspaceID, description, testCommand, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}
@@ -270,13 +270,13 @@ func handleTaskNew(ctx context.Context, db *db.DB, arguments map[string]interfac
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Created task #%d: %s\n%s", task.ID, task.Description, string(content))),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Created task #%d: %s\n%s", task.ID, task.Description, string(content))},
 		},
 	}, nil
 }
 
-func handleTaskList(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+func handleTaskList(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
@@ -298,7 +298,7 @@ func handleTaskList(ctx context.Context, db *db.DB, arguments map[string]interfa
 		limit = int(limitVal)
 	}
 
-	tasks, err := db.ListTasks(ctx, ws.WorkspaceID, statusFilter, limit, 0)
+	tasks, err := database.ListTasks(ctx, ws.WorkspaceID, statusFilter, limit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -306,7 +306,7 @@ func handleTaskList(ctx context.Context, db *db.DB, arguments map[string]interfa
 	if len(tasks) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.NewTextContent("No tasks found"),
+				mcp.TextContent{Type: "text", Text: "No tasks found"},
 			},
 		}, nil
 	}
@@ -318,23 +318,23 @@ func handleTaskList(ctx context.Context, db *db.DB, arguments map[string]interfa
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Found %d task(s):\n%s", len(tasks), string(content))),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Found %d task(s):\n%s", len(tasks), string(content))},
 		},
 	}, nil
 }
 
-func handleTaskStart(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func handleTaskStart(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	taskID, ok := arguments["task_id"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("task_id argument is required and must be a number")
 	}
 
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	task, err := db.GetTaskByID(ctx, int64(taskID))
+	task, err := database.GetTaskByID(ctx, int64(taskID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
@@ -343,22 +343,22 @@ func handleTaskStart(ctx context.Context, db *db.DB, arguments map[string]interf
 		return nil, fmt.Errorf("task %d does not belong to current workspace", int64(taskID))
 	}
 
-	if err := db.UpdateTaskStatus(ctx, int64(taskID), db.TaskStatusActive); err != nil {
+	if err := database.UpdateTaskStatus(ctx, int64(taskID), db.TaskStatusActive); err != nil {
 		return nil, fmt.Errorf("failed to start task: %w", err)
 	}
 
-	if err := db.SetCurrentTask(ctx, ws.WorkspaceID, int64(taskID)); err != nil {
+	if err := database.SetCurrentTask(ctx, ws.WorkspaceID, int64(taskID)); err != nil {
 		return nil, fmt.Errorf("failed to set current task: %w", err)
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Started task #%d: %s", int64(taskID), task.Description)),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Started task #%d: %s", int64(taskID), task.Description)},
 		},
 	}, nil
 }
 
-func handleTaskDone(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func handleTaskDone(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	taskID, ok := arguments["task_id"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("task_id argument is required and must be a number")
@@ -369,12 +369,12 @@ func handleTaskDone(ctx context.Context, db *db.DB, arguments map[string]interfa
 		skipTest = skipVal
 	}
 
-	task, err := db.GetTaskByID(ctx, int64(taskID))
+	task, err := database.GetTaskByID(ctx, int64(taskID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
@@ -398,23 +398,23 @@ func handleTaskDone(ctx context.Context, db *db.DB, arguments map[string]interfa
 			return nil, fmt.Errorf("failed to marshal test result: %w", err)
 		}
 
-		if err := db.UpdateTaskTestResult(ctx, int64(taskID), resultJSON); err != nil {
+		if err := database.UpdateTaskTestResult(ctx, int64(taskID), resultJSON); err != nil {
 			return nil, fmt.Errorf("failed to update test result: %w", err)
 		}
 
-		_, err = db.CreateTrace(ctx, int64(taskID), task.TestCommand.String, &testResult.ExitCode,
+		_, err = database.CreateTrace(ctx, int64(taskID), task.TestCommand.String, &testResult.ExitCode,
 			&testResult.Output, nil, &testResult.DurationMS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to record trace: %w", err)
 		}
 	}
 
-	if err := db.UpdateTaskStatus(ctx, int64(taskID), db.TaskStatusDone); err != nil {
+	if err := database.UpdateTaskStatus(ctx, int64(taskID), db.TaskStatusDone); err != nil {
 		return nil, fmt.Errorf("failed to mark task as done: %w", err)
 	}
 
 	if ws.CurrentTaskID.Valid && ws.CurrentTaskID.Int64 == int64(taskID) {
-		if err := db.SetCurrentTask(ctx, ws.WorkspaceID, 0); err != nil {
+		if err := database.SetCurrentTask(ctx, ws.WorkspaceID, 0); err != nil {
 			return nil, fmt.Errorf("failed to clear current task: %w", err)
 		}
 	}
@@ -432,12 +432,12 @@ func handleTaskDone(ctx context.Context, db *db.DB, arguments map[string]interfa
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(msg),
+			mcp.TextContent{Type: "text", Text: msg},
 		},
 	}, nil
 }
 
-func handleCheckpoint(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func handleCheckpoint(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	message, ok := arguments["message"].(string)
 	if !ok || message == "" {
 		return nil, fmt.Errorf("message argument is required and must be a non-empty string")
@@ -448,7 +448,7 @@ func handleCheckpoint(ctx context.Context, db *db.DB, arguments map[string]inter
 		allowDirty = allowVal
 	}
 
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
@@ -459,7 +459,7 @@ func handleCheckpoint(ctx context.Context, db *db.DB, arguments map[string]inter
 	}
 
 	if isDirty && !allowDirty {
-		return nil, fmt.Errorf("working tree has uncommitted changes. Use allow_dirty=true to force checkpoint")
+		return nil, fmt.Errorf("working tree has uncommitted changes. Use allow_dirty=true to proceed")
 	}
 
 	agentState := ws.AgentState
@@ -481,19 +481,19 @@ func handleCheckpoint(ctx context.Context, db *db.DB, arguments map[string]inter
 		return nil, fmt.Errorf("failed to create commit: %w", err)
 	}
 
-	checkpoint, err := db.CreateCheckpoint(ctx, ws.WorkspaceID, commitHash, agentState, message, !isDirty)
+	checkpoint, err := database.CreateCheckpoint(ctx, ws.WorkspaceID, commitHash, agentState, message, !isDirty)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create checkpoint: %w", err)
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Created checkpoint #%d at commit %s: %s", checkpoint.ID, commitHash[:8], message)),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Created checkpoint #%d at commit %s: %s", checkpoint.ID, commitHash[:8], message)},
 		},
 	}, nil
 }
 
-func handleRestore(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func handleRestore(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	force := false
 	if forceVal, ok := arguments["force"].(bool); ok {
 		force = forceVal
@@ -504,7 +504,7 @@ func handleRestore(ctx context.Context, db *db.DB, arguments map[string]interfac
 		hard = hardVal
 	}
 
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
@@ -518,7 +518,7 @@ func handleRestore(ctx context.Context, db *db.DB, arguments map[string]interfac
 		return nil, fmt.Errorf("working tree has uncommitted changes. Use force=true to proceed")
 	}
 
-	checkpoint, err := db.GetLatestCheckpoint(ctx, ws.WorkspaceID)
+	checkpoint, err := database.GetLatestCheckpoint(ctx, ws.WorkspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest checkpoint: %w", err)
 	}
@@ -537,39 +537,39 @@ func handleRestore(ctx context.Context, db *db.DB, arguments map[string]interfac
 	}
 
 	if len(checkpoint.AgentState) > 0 {
-		if err := db.UpdateWorkspaceAgentState(ctx, ws.WorkspaceID, checkpoint.AgentState); err != nil {
+		if err := database.UpdateWorkspaceAgentState(ctx, ws.WorkspaceID, checkpoint.AgentState); err != nil {
 			return nil, fmt.Errorf("failed to restore agent state: %w", err)
 		}
 	}
 
-	if _, err := db.GetOrCreateCurrentWorkspace(ctx); err != nil {
+	if _, err := database.GetOrCreateCurrentWorkspace(ctx); err != nil {
 		return nil, fmt.Errorf("failed to update workspace after restore: %w", err)
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Restored to checkpoint #%d at commit %s: %s", checkpoint.ID, checkpoint.CommitHash[:8], checkpoint.Message)),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Restored to checkpoint #%d at commit %s: %s", checkpoint.ID, checkpoint.CommitHash[:8], checkpoint.Message)},
 		},
 	}, nil
 }
 
-func handleTrace(ctx context.Context, db *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func handleTrace(ctx context.Context, database *db.DB, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	taskID, ok := arguments["task_id"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("task_id argument is required and must be a number")
 	}
 
-	limit := 10
+	limit := 0
 	if limitVal, ok := arguments["limit"].(float64); ok {
 		limit = int(limitVal)
 	}
 
-	ws, err := db.GetOrCreateCurrentWorkspace(ctx)
+	ws, err := database.GetOrCreateCurrentWorkspace(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	task, err := db.GetTaskByID(ctx, int64(taskID))
+	task, err := database.GetTaskByID(ctx, int64(taskID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
@@ -578,15 +578,15 @@ func handleTrace(ctx context.Context, db *db.DB, arguments map[string]interface{
 		return nil, fmt.Errorf("task %d does not belong to current workspace", int64(taskID))
 	}
 
-	traces, err := db.ListTraces(ctx, int64(taskID), limit, 0)
+	traces, err := database.ListTraces(ctx, int64(taskID), limit, 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get traces: %w", err)
+		return nil, fmt.Errorf("failed to list traces: %w", err)
 	}
 
 	if len(traces) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.NewTextContent(fmt.Sprintf("No traces found for task #%d", int64(taskID))),
+				mcp.TextContent{Type: "text", Text: fmt.Sprintf("No traces found for task #%d", int64(taskID))},
 			},
 		}, nil
 	}
@@ -598,7 +598,7 @@ func handleTrace(ctx context.Context, db *db.DB, arguments map[string]interface{
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Found %d trace(s) for task #%d:\n%s", len(traces), int64(taskID), string(content))),
+			mcp.TextContent{Type: "text", Text: fmt.Sprintf("Found %d trace(s) for task #%d:\n%s", len(traces), int64(taskID), string(content))},
 		},
 	}, nil
 }

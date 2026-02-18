@@ -33,7 +33,7 @@ type Workspace struct {
 	DisplayName   sql.NullString `json:"display_name,omitempty"`
 	CurrentTaskID sql.NullInt64  `json:"current_task_id,omitempty"`
 	AgentState    []byte         `json:"agent_state,omitempty"` // JSON-encoded agent state
-	TodoList      string         `json:"todo_list,omitempty"`
+	TodoList      sql.NullString `json:"todo_list,omitempty"`
 	LastCommit    string         `json:"last_commit,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`

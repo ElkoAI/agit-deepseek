@@ -21,6 +21,18 @@ func (db *DB) GetOrCreateCurrentWorkspace(ctx context.Context) (*Workspace, erro
 		return nil, fmt.Errorf("failed to get worktree path: %w", err)
 	}
 
+	// Create sql.NullString for worktree path
+	var worktreeNS sql.NullString
+	if worktreePath != "" {
+		worktreeNS = sql.NullString{String: worktreePath, Valid: true}
+	}
+
+	// Parameter for the query - use nil for empty worktree path
+	var worktreeParam interface{} = worktreeNS
+	if worktreePath == "" {
+		worktreeParam = nil
+	}
+
 	commitHash, err := getCurrentCommitHash()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current commit hash: %w", err)
@@ -28,12 +40,13 @@ func (db *DB) GetOrCreateCurrentWorkspace(ctx context.Context) (*Workspace, erro
 
 	// Try to find existing workspace
 	var workspace Workspace
+
 	err = db.conn.QueryRowContext(ctx, `
 		SELECT workspace_id, branch, worktree_path, display_name, current_task_id,
 		       agent_state, todo_list, last_commit, created_at, updated_at
 		FROM workspaces
 		WHERE branch = ? AND (worktree_path = ? OR (worktree_path IS NULL AND ? IS NULL))
-	`, branch, worktreePath, worktreePath).Scan(
+	`, branch, worktreeParam, worktreeParam).Scan(
 		&workspace.WorkspaceID,
 		&workspace.Branch,
 		&workspace.WorktreePath,
@@ -68,15 +81,10 @@ func (db *DB) GetOrCreateCurrentWorkspace(ctx context.Context) (*Workspace, erro
 
 	// Create new workspace
 	displayName := sql.NullString{String: branch, Valid: true}
-	var wp sql.NullString
-	if worktreePath != "" {
-		wp = sql.NullString{String: worktreePath, Valid: true}
-	}
-
 	result, err := db.conn.ExecContext(ctx, `
 		INSERT INTO workspaces (branch, worktree_path, display_name, last_commit)
 		VALUES (?, ?, ?, ?)
-	`, branch, wp, displayName, commitHash)
+	`, branch, worktreeNS, displayName, commitHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
@@ -155,7 +163,7 @@ func (db *DB) UpdateWorkspaceAgentState(ctx context.Context, workspaceID string,
 }
 
 // UpdateWorkspaceTodoList updates the todo list for a workspace
-func (db *DB) UpdateWorkspaceTodoList(ctx context.Context, workspaceID, todoList string) error {
+func (db *DB) UpdateWorkspaceTodoList(ctx context.Context, workspaceID string, todoList sql.NullString) error {
 	_, err := db.conn.ExecContext(ctx, `
 		UPDATE workspaces
 		SET todo_list = ?, updated_at = CURRENT_TIMESTAMP

@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -56,9 +57,12 @@ func (db *DB) Close() error {
 
 // migrate checks the current schema version and applies necessary migrations
 func (db *DB) migrate() error {
+	log.Printf("Starting database migration")
+
 	// Start transaction for migration
 	tx, err := db.conn.Begin()
 	if err != nil {
+		log.Printf("Failed to begin migration transaction: %v", err)
 		return fmt.Errorf("failed to begin migration transaction: %w", err)
 	}
 	defer tx.Rollback()
@@ -72,26 +76,45 @@ func (db *DB) migrate() error {
 	`).Scan(&currentVersion)
 
 	if err == sql.ErrNoRows {
+		log.Printf("Fresh database detected, initializing schema")
 		// Fresh database, initialize with version 1
 		if err := db.initializeSchema(tx); err != nil {
+			log.Printf("Failed to initialize schema: %v", err)
 			return fmt.Errorf("failed to initialize schema: %w", err)
 		}
 		currentVersion = 1
+		log.Printf("Schema initialized successfully, version: %d", currentVersion)
 	} else if err != nil {
+		log.Printf("schema_meta table doesn't exist (pre-versioning schema): %v", err)
 		// schema_meta table doesn't exist yet (pre-versioning schema)
 		// This is a legacy database, we need to handle it
-		return db.migrateLegacy(tx)
+		freshSchemaCreated, err := db.migrateLegacy(tx)
+		if err != nil {
+			return err
+		}
+		if freshSchemaCreated {
+			// Fresh schema was created, treat as version 1
+			currentVersion = 1
+			log.Printf("Fresh schema created in legacy migration, version: %d", currentVersion)
+		}
+	} else {
+		log.Printf("Existing database found, current version: %d", currentVersion)
 	}
+
+	log.Printf("Applying migrations from version %d", currentVersion)
 
 	// Apply migrations sequentially
 	for version := currentVersion + 1; ; version++ {
 		migrationFunc, ok := migrations[version]
 		if !ok {
 			// No more migrations to apply
+			log.Printf("No more migrations to apply (stopped at version %d)", version-1)
 			break
 		}
 
+		log.Printf("Applying migration to version %d", version)
 		if err := migrationFunc(tx); err != nil {
+			log.Printf("Failed to apply migration v%d: %v", version, err)
 			return fmt.Errorf("failed to apply migration v%d: %w", version, err)
 		}
 
@@ -100,25 +123,33 @@ func (db *DB) migrate() error {
 			INSERT INTO schema_meta (version, description)
 			VALUES (?, ?)
 		`, version, fmt.Sprintf("Migration to version %d", version)); err != nil {
+			log.Printf("Failed to record migration v%d: %v", version, err)
 			return fmt.Errorf("failed to record migration v%d: %w", version, err)
 		}
+		log.Printf("Migration to version %d applied successfully", version)
 	}
 
+	log.Printf("All migrations completed successfully")
 	return tx.Commit()
 }
 
 // initializeSchema creates the initial schema (version 1)
 func (db *DB) initializeSchema(tx *sql.Tx) error {
+	log.Printf("Executing initial schema")
 	// Execute embedded schema
 	if _, err := tx.Exec(initialSchema); err != nil {
+		log.Printf("Failed to execute schema: %v", err)
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
 
+	log.Printf("Initial schema executed successfully")
 	return nil
 }
 
 // migrateLegacy handles databases created before schema versioning was added
-func (db *DB) migrateLegacy(tx *sql.Tx) error {
+func (db *DB) migrateLegacy(tx *sql.Tx) (bool, error) {
+	log.Printf("Handling legacy database migration")
+
 	// Check if workspaces table exists with old schema (branch as primary key)
 	var tableExists bool
 	err := tx.QueryRow(`
@@ -127,13 +158,22 @@ func (db *DB) migrateLegacy(tx *sql.Tx) error {
 	`).Scan(&tableExists)
 
 	if err != nil {
-		return fmt.Errorf("failed to check for legacy tables: %w", err)
+		log.Printf("Failed to check for legacy tables: %v", err)
+		return false, fmt.Errorf("failed to check for legacy tables: %w", err)
 	}
 
+	log.Printf("Legacy workspaces table exists: %v", tableExists)
+
 	if !tableExists {
+		log.Printf("No legacy tables found, initializing fresh schema")
 		// No tables exist, just initialize fresh schema
-		return db.initializeSchema(tx)
+		if err := db.initializeSchema(tx); err != nil {
+			return false, err
+		}
+		return true, nil  // Fresh schema created
 	}
+
+	log.Printf("Legacy database exists - marking as version 0 (needs migration)")
 
 	// Legacy database exists - need to migrate from branch-based to workspace_id-based
 	// This is a complex migration that should be implemented when needed
@@ -145,7 +185,8 @@ func (db *DB) migrateLegacy(tx *sql.Tx) error {
 			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)
 	`); err != nil {
-		return fmt.Errorf("failed to create schema_meta table: %w", err)
+		log.Printf("Failed to create schema_meta table: %v", err)
+		return false, fmt.Errorf("failed to create schema_meta table: %w", err)
 	}
 
 	// Mark as version 0 (requires manual migration)
@@ -153,10 +194,12 @@ func (db *DB) migrateLegacy(tx *sql.Tx) error {
 		INSERT INTO schema_meta (version, description)
 		VALUES (0, 'Legacy schema - requires manual migration to workspace_id')
 	`); err != nil {
-		return fmt.Errorf("failed to record legacy version: %w", err)
+		log.Printf("Failed to record legacy version: %v", err)
+		return false, fmt.Errorf("failed to record legacy version: %w", err)
 	}
 
-	return fmt.Errorf("legacy database detected - requires manual migration. Run 'agit migrate-legacy'")
+	log.Printf("Legacy database marked for manual migration")
+	return false, fmt.Errorf("legacy database detected - requires manual migration. Run 'agit migrate-legacy'")
 }
 
 // migrations maps version numbers to migration functions
