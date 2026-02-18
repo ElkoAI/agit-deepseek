@@ -1,0 +1,64 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/agit
+/agit-mcp
+
+
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+*.cover
+coverage.txt
+coverage.html
+profile.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS generated files
+.directory
+*~
+
+# Local development files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+
+# AGIT specific
+.agit-manifest.json
+*.db
+*.db-shm
+*.db-wal
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Logs
+*.log
+logs/
