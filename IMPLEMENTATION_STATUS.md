@@ -228,6 +228,22 @@ go build -o agit-mcp ./cmd/agit-mcp
 - CI/CD integration examples
 - Community feedback incorporation
 
+## Version History
+
+### v0.1.0-alpha (Initial Commit - February 18, 2025)
+- **Commit Hash**: `b80bbac`
+- **Status**: First working implementation committed
+- **Features**:
+  - Database schema with workspace_id UUIDs
+  - Schema versioning and migration system
+  - Git integration for branch detection and operations
+  - MCP server foundation with 8 tools
+  - CLI for workspace, task, and checkpoint management
+  - Safety guards for checkpoint/restore operations
+  - Enhanced task lifecycle with optional tests
+- **Known Issues**: MCP server requires API compatibility fixes
+- **Tag**: `v0.1.0-alpha` created
+
 ## Conclusion
 
 The AGIT foundation is solid with critical design issues addressed upfront. The remaining work is primarily integration and polish rather than architectural changes. The MVP is achievable within 2-3 weeks of focused development.
@@ -238,4 +254,4 @@ The AGIT foundation is solid with critical design issues addressed upfront. The 
 
 ---
 *Last Updated: February 18, 2025*  
-*Status: 70% Complete - MVP Foundations Laid*
+*Status: 70% Complete - MVP Foundations Laid (Commit: b80bbac, Tag: v0.1.0-alpha)*

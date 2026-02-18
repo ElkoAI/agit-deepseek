@@ -13,6 +13,31 @@ AGIT is a Go-based MCP server that provides Git-native state persistence for AI 
 - **Safe checkpoints**: Git commits + agent state snapshots with safety guards
 - **Schema versioning**: Built-in migration system from day one
 - **Multi-worktree ready**: Designed to support Git worktrees from the start
+## Development Status
+
+**Current Version**: v0.1.0-alpha (Initial Commit: `b80bbac`)
+
+AGIT is currently in active development with MVP foundations laid. The core database, CLI, and Git integration are implemented. The MCP server requires API compatibility fixes before full functionality.
+
+**✅ Implemented**:
+- Database schema with `workspace_id` UUIDs (not branch-dependent)
+- Schema versioning and migration system
+- Git operations integration
+- Complete CLI with workspace/task/checkpoint management
+- Safety guards for checkpoint/restore operations
+
+**⚠️ Known Issues**:
+- MCP server needs API compatibility fixes
+- Test execution currently stubbed (requires implementation)
+- Some edge cases in Git operations need testing
+
+**📋 Next Steps**:
+- Fix MCP server API compatibility
+- Implement real test execution
+- Add unit tests
+- Integrate with MCP clients (Claude Code, OpenCode)
+
+For detailed status, see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
 ## Installation
 
